@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Net;
@@ -8,6 +8,7 @@ using System.Web.Script.Serialization;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Diagnostics;
+using System.Globalization;
 #if !NET_35
 using System.Threading.Tasks;
 #endif
@@ -130,6 +131,17 @@ namespace Dice.Client.Web
                 { "Password", password }
             };
         }
+        static NameValueCollection GetFormDataLogin(string apiKey, string username, string password, int totp)
+        {
+            return new NameValueCollection
+            {
+                { "a", "Login" },
+                { "Key", apiKey },
+                { "Username", username },
+                { "Password", password },
+                { "Totp", totp.ToString() }
+            };
+        }
         static NameValueCollection GetFormDataCreateUser(string sessionCookie, string username, string password)
         {
             return new NameValueCollection
@@ -150,6 +162,17 @@ namespace Dice.Client.Web
                 { "Address", address }
             };
         }
+        static NameValueCollection GetFormDataWithdraw(string sessionCookie, decimal amount, string address, int totp)
+        {
+            return new NameValueCollection
+            {
+                { "a", "Withdraw" },
+                { "s", sessionCookie },
+                { "Amount", ((long)(amount*100000000)).ToString() },
+                { "Address", address },
+                { "Totp", totp.ToString() }
+            };
+        }
         static NameValueCollection GetFormDataChangePassword(string sessionCookie, string oldPassword, string newPassword)
         {
             return new NameValueCollection
@@ -166,15 +189,6 @@ namespace Dice.Client.Web
             {
                 { "a", "GetServerSeedHash" },
                 { "s", sessionCookie }
-            };
-        }
-        static NameValueCollection GetFormDataSetClientSeed(string sessionCookie, long seed)
-        {
-            return new NameValueCollection
-            {
-                { "a", "SetClientSeed" },
-                { "s", sessionCookie },
-                { "Seed", seed.ToString() }
             };
         }
         static NameValueCollection GetFormDataUpdateEmail(string sessionCookie, string email)
@@ -211,7 +225,7 @@ namespace Dice.Client.Web
                 { "s", sessionCookie }
             };
         }
-        static NameValueCollection GetFormDataPlaceBet(string sessionCookie, decimal payIn, long guessLow, long guessHigh)
+        static NameValueCollection GetFormDataPlaceBet(string sessionCookie, decimal payIn, long guessLow, long guessHigh, int clientSeed)
         {
             return new NameValueCollection
             {
@@ -219,7 +233,8 @@ namespace Dice.Client.Web
                 { "s", sessionCookie },
                 { "PayIn", ((long)(payIn*100000000)).ToString() },
                 { "Low", guessLow.ToString() },
-                { "High", guessHigh.ToString() }
+                { "High", guessHigh.ToString() },
+                { "ClientSeed", clientSeed.ToString() }
             };
         }
         static NameValueCollection GetFormDataPlaceAutomatedBets(string sessionCookie, AutomatedBetsSettings settings)
@@ -242,7 +257,8 @@ namespace Dice.Client.Web
                 { "StopMaxBalance", ((long)(settings.StopMaxBalance*100000000)).ToString() },
                 { "StopMinBalance", ((long)settings.StopMinBalance*100000000).ToString() },
                 { "StartingPayIn", ((long)settings.StartingPayIn*100000000).ToString() },
-                { "Compact", "1" }
+                { "Compact", "1" },
+                { "ClientSeed", settings.ClientSeed.ToString() }
             };
         }
         #endregion
@@ -272,12 +288,6 @@ namespace Dice.Client.Web
                 session.Balance -= res.WithdrawalPending;
             return res;
         }
-        static SetClientSeedResponse Process(SessionInfo session, SetClientSeedResponse res, long seed)
-        {
-            if (res.Success)
-                session.ClientSeed = seed;
-            return res;
-        }
         static UpdateEmailResponse Process(SessionInfo session, UpdateEmailResponse res, string email)
         {
             if (res.Success)
@@ -296,7 +306,7 @@ namespace Dice.Client.Web
                 session.DepositAddress = res.DepositAddress;
             return res;
         }
-        static PlaceBetResponse Process(SessionInfo session, PlaceBetResponse res, decimal payIn, long guessLow, long guessHigh)
+        static PlaceBetResponse Process(SessionInfo session, PlaceBetResponse res, decimal payIn, long guessLow, long guessHigh, int clientSeed)
         {
             if (res.Success)
             {
@@ -317,20 +327,19 @@ namespace Dice.Client.Web
             }
             return res;
         }
-        static PlaceAutomatedBetsResponse Process(SessionInfo session, PlaceAutomatedBetsResponse res, AutomatedBetsSettings settings, long clientSeed)
+        static PlaceAutomatedBetsResponse Process(SessionInfo session, PlaceAutomatedBetsResponse res, AutomatedBetsSettings settings)
         {
             if (res.Success)
             {
                 byte[] seed = new byte[res.ServerSeed.Length / 2];
                 for (int x = 0; x < seed.Length; ++x)
                     seed[x] = byte.Parse(res.ServerSeed.Substring(x * 2, 2), System.Globalization.NumberStyles.HexNumber);
-                byte[] client = BitConverter.GetBytes(clientSeed);
+                byte[] client = BitConverter.GetBytes(settings.ClientSeed).Reverse().ToArray();
                 decimal payin = settings.StartingPayIn;
                 decimal bal = res.StartingBalance;
                 for (int x = 0; x < res.BetCount; ++x)
                 {
-                    byte[] number = Encoding.ASCII.GetBytes(res.BetIds[x].ToString());
-                    byte[] data = number.Concat(seed).Concat(client).ToArray();
+                    byte[] data = seed.Concat(client).Concat(BitConverter.GetBytes(x).Reverse()).ToArray();
                     using (SHA512 sha512 = CreateSHA512())
                     {
                         byte[] hash = sha512.ComputeHash(sha512.ComputeHash(data));
@@ -476,8 +485,38 @@ namespace Dice.Client.Web
         }
         public static decimal CalculatePayoutMultiplier(long guessLow, long guessHigh)
         {
-            return HousePayout / CalculateChanceToWin(guessLow, guessHigh);
+            return decimal.Floor((HousePayout / CalculateChanceToWin(guessLow, guessHigh)) * 1000000M) / 1000000M;
         }
+        public static int GenerateBetResult(string serverSeed, int clientSeed, int betNumber)
+        {
+            if (serverSeed == null)
+                throw new ArgumentNullException();
+            if (betNumber < 0 || serverSeed.Length != 64)
+                throw new ArgumentOutOfRangeException();
+
+            Func<string, byte[]> strtobytes = s => Enumerable
+                .Range(0, s.Length / 2)
+                .Select(x => byte.Parse(s.Substring(x * 2, 2), NumberStyles.HexNumber))
+                .ToArray();
+            byte[] server = strtobytes(serverSeed);
+            byte[] client = BitConverter.GetBytes(clientSeed).Reverse().ToArray();
+            byte[] num = BitConverter.GetBytes(betNumber).Reverse().ToArray();
+            byte[] data = server.Concat(client).Concat(num).ToArray();
+            using (SHA512 sha512 = new SHA512Managed())
+            {
+                byte[] hash = sha512.ComputeHash(sha512.ComputeHash(data));
+                while (true)
+                {
+                    for (int x = 0; x <= 61; x += 3)
+                    {
+                        long result = (hash[x] << 16) | (hash[x + 1] << 8) | hash[x + 2];
+                        if (result < 16000000)
+                            return (int)(result % 1000000);
+                    }
+                    hash = sha512.ComputeHash(hash);
+                }
+            }
+        }        
         #endregion
 
         #region API calls
@@ -497,6 +536,11 @@ namespace Dice.Client.Web
             Validate(apiKey, username);
             return Process(Request<BeginSessionResponse>(GetFormDataLogin(apiKey, username, password)), username);
         }
+        public static BeginSessionResponse BeginSession(string apiKey, string username, string password, int totp)
+        {
+            Validate(apiKey, username);
+            return Process(Request<BeginSessionResponse>(GetFormDataLogin(apiKey, username, password, totp)), username);
+        }
         public static CreateUserResponse CreateUser(SessionInfo session, string username, string password)
         {
             Validate(session, username, password);
@@ -512,10 +556,19 @@ namespace Dice.Client.Web
         {
             return Withdraw(session, 0, address);
         }
+        public static WithdrawResponse WithdrawAll(SessionInfo session, string address, int totp)
+        {
+            return Withdraw(session, 0, address, totp);
+        }
         public static WithdrawResponse Withdraw(SessionInfo session, decimal amount, string address)
         {
             Validate(session, address);
             return Process(session, Request<WithdrawResponse>(GetFormDataWithdraw(session.SessionCookie, amount, address)));
+        }
+        public static WithdrawResponse Withdraw(SessionInfo session, decimal amount, string address, int totp)
+        {
+            Validate(session, address);
+            return Process(session, Request<WithdrawResponse>(GetFormDataWithdraw(session.SessionCookie, amount, address, totp)));
         }
         public static ChangePasswordResponse ChangePassword(SessionInfo session, string oldPassword, string newPassword)
         {
@@ -526,11 +579,6 @@ namespace Dice.Client.Web
         {
             Validate(session);
             return Request<GetServerSeedHashResponse>(GetFormDataGetServerSeedHash(session.SessionCookie));
-        }
-        public static SetClientSeedResponse SetClientSeed(SessionInfo session, long seed)
-        {
-            Validate(session);
-            return Process(session, Request<SetClientSeedResponse>(GetFormDataSetClientSeed(session.SessionCookie, seed)), seed);
         }
         public static UpdateEmailResponse UpdateEmail(SessionInfo session, string email)
         {
@@ -551,18 +599,17 @@ namespace Dice.Client.Web
             Validate(session);
             return Process(session, Request<GetDepositAddressResponse>(GetFormDataGetDepositAddress(session.SessionCookie)));
         }
-        public static PlaceBetResponse PlaceBet(SessionInfo session, decimal payIn, long guessLow, long guessHigh)
+        public static PlaceBetResponse PlaceBet(SessionInfo session, decimal payIn, long guessLow, long guessHigh, int clientSeed)
         {
             Validate(session, guessLow, guessHigh);
             if (payIn > 0) payIn = -payIn;
-            return Process(session, Request<PlaceBetResponse>(GetFormDataPlaceBet(session.SessionCookie, payIn, guessLow, guessHigh)), payIn, guessLow, guessHigh);
+            return Process(session, Request<PlaceBetResponse>(GetFormDataPlaceBet(session.SessionCookie, payIn, guessLow, guessHigh, clientSeed)), payIn, guessLow, guessHigh, clientSeed);
         }
         public static PlaceAutomatedBetsResponse PlaceAutomatedBets(SessionInfo session, AutomatedBetsSettings settings)
         {
             Validate(session, settings);
-            long clientSeed = session.ClientSeed;
             return Process(session, Request<PlaceAutomatedBetsResponse>(
-                GetFormDataPlaceAutomatedBets(session.SessionCookie, settings)), settings, clientSeed);
+                GetFormDataPlaceAutomatedBets(session.SessionCookie, settings)), settings);
         }
         #endregion
 
@@ -583,6 +630,11 @@ namespace Dice.Client.Web
             Validate(apiKey, username);
             return Process(await RequestAsync<BeginSessionResponse>(GetFormDataLogin(apiKey, username, password)), username);
         }
+        public static async Task<BeginSessionResponse> BeginSessionAsync(string apiKey, string username, string password, int totp)
+        {
+            Validate(apiKey, username);
+            return Process(await RequestAsync<BeginSessionResponse>(GetFormDataLogin(apiKey, username, password, totp)), username);
+        }
         public static async Task<CreateUserResponse> CreateUserAsync(SessionInfo session, string username, string password)
         {
             Validate(session, username, password);
@@ -598,10 +650,19 @@ namespace Dice.Client.Web
         {
             return await WithdrawAsync(session, 0, address);
         }
+        public static async Task<WithdrawResponse> WithdrawAllAsync(SessionInfo session, string address, int totp)
+        {
+            return await WithdrawAsync(session, 0, address, totp);
+        }
         public static async Task<WithdrawResponse> WithdrawAsync(SessionInfo session, decimal amount, string address)
         {
             Validate(session, address);
             return Process(session, await RequestAsync<WithdrawResponse>(GetFormDataWithdraw(session.SessionCookie, amount, address)));
+        }
+        public static async Task<WithdrawResponse> WithdrawAsync(SessionInfo session, decimal amount, string address, int totp)
+        {
+            Validate(session, address);
+            return Process(session, await RequestAsync<WithdrawResponse>(GetFormDataWithdraw(session.SessionCookie, amount, address, totp)));
         }
         public static async Task<ChangePasswordResponse> ChangePasswordAsync(SessionInfo session, string oldPassword, string newPassword)
         {
@@ -612,11 +673,6 @@ namespace Dice.Client.Web
         {
             Validate(session);
             return await RequestAsync<GetServerSeedHashResponse>(GetFormDataGetServerSeedHash(session.SessionCookie));
-        }
-        public static async Task<SetClientSeedResponse> SetClientSeedAsync(SessionInfo session, long seed)
-        {
-            Validate(session);
-            return Process(session, await RequestAsync<SetClientSeedResponse>(GetFormDataSetClientSeed(session.SessionCookie, seed)), seed);
         }
         public static async Task<UpdateEmailResponse> UpdateEmailAsync(SessionInfo session, string email)
         {
@@ -637,19 +693,17 @@ namespace Dice.Client.Web
             Validate(session);
             return Process(session, await RequestAsync<GetDepositAddressResponse>(GetFormDataGetDepositAddress(session.SessionCookie)));
         }
-        public static async Task<PlaceBetResponse> PlaceBetAsync(SessionInfo session, decimal payIn, long guessLow, long guessHigh)
+        public static async Task<PlaceBetResponse> PlaceBetAsync(SessionInfo session, decimal payIn, long guessLow, long guessHigh, int clientSeed)
         {
             Validate(session, guessLow, guessHigh);
             if (payIn > 0) payIn = -payIn;
-            return Process(session, await RequestAsync<PlaceBetResponse>(GetFormDataPlaceBet(session.SessionCookie, payIn, guessLow, guessHigh)), payIn, guessLow, guessHigh);
+            return Process(session, await RequestAsync<PlaceBetResponse>(GetFormDataPlaceBet(session.SessionCookie, payIn, guessLow, guessHigh, clientSeed)), payIn, guessLow, guessHigh, clientSeed);
         }
         public static async Task<PlaceAutomatedBetsResponse> PlaceAutomatedBetsAsync(SessionInfo session, AutomatedBetsSettings settings)
         {
             Validate(session, settings);
-
-            long clientSeed = session.ClientSeed;
             return Process(session, await RequestAsync<PlaceAutomatedBetsResponse>(
-                GetFormDataPlaceAutomatedBets(session.SessionCookie, settings)), settings, clientSeed);
+                GetFormDataPlaceAutomatedBets(session.SessionCookie, settings)), settings);
         }
 #endif
         #endregion
@@ -696,6 +750,10 @@ namespace Dice.Client.Web
         {
             return QueueWork(complete, state, () => BeginSession(apiKey, username, password));
         }
+        public static IAsyncResult BeginBeginSession(string apiKey, string username, string password, int totp, AsyncCallback complete, object state)
+        {
+            return QueueWork(complete, state, () => BeginSession(apiKey, username, password, totp));
+        }
         public static BeginSessionResponse EndBeginSession(IAsyncResult i)
         {
             return GetWorkResult<BeginSessionResponse>(i);
@@ -720,9 +778,17 @@ namespace Dice.Client.Web
         {
             return QueueWork(complete, state, () => WithdrawAll(session, address));
         }
+        public static IAsyncResult BeginWithdrawAll(SessionInfo session, string address, int totp, AsyncCallback complete, object state)
+        {
+            return QueueWork(complete, state, () => WithdrawAll(session, address, totp));
+        }
         public static IAsyncResult BeginWithdraw(SessionInfo session, decimal amount, string address, AsyncCallback complete, object state)
         {
             return QueueWork(complete, state, () => Withdraw(session, amount, address));
+        }
+        public static IAsyncResult BeginWithdraw(SessionInfo session, decimal amount, string address, int totp, AsyncCallback complete, object state)
+        {
+            return QueueWork(complete, state, () => Withdraw(session, amount, address, totp));
         }
         public static WithdrawResponse EndWithdraw(IAsyncResult i)
         {
@@ -743,14 +809,6 @@ namespace Dice.Client.Web
         public static GetServerSeedHashResponse EndGetServerSeedHash(IAsyncResult i)
         {
             return GetWorkResult<GetServerSeedHashResponse>(i);
-        }
-        public static IAsyncResult BeginSetClientSeed(SessionInfo session, long seed, AsyncCallback complete, object state)
-        {
-            return QueueWork(complete, state, () => SetClientSeed(session, seed));
-        }
-        public static SetClientSeedResponse EndSetClientSeed(IAsyncResult i)
-        {
-            return GetWorkResult<SetClientSeedResponse>(i);
         }
         public static IAsyncResult BeginUpdateEmail(SessionInfo session, string email, AsyncCallback complete, object state)
         {
@@ -776,9 +834,9 @@ namespace Dice.Client.Web
         {
             return GetWorkResult<GetDepositAddressResponse>(i);
         }
-        public static IAsyncResult BeginPlaceBet(SessionInfo session, decimal payIn, long guessLow, long guessHigh, AsyncCallback complete, object state)
+        public static IAsyncResult BeginPlaceBet(SessionInfo session, decimal payIn, long guessLow, long guessHigh, int clientSeed, AsyncCallback complete, object state)
         {
-            return QueueWork(complete, state, () => PlaceBet(session, payIn, guessLow, guessHigh));
+            return QueueWork(complete, state, () => PlaceBet(session, payIn, guessLow, guessHigh, clientSeed));
         }
         public static PlaceBetResponse EndPlaceBet(IAsyncResult i)
         {

@@ -45,6 +45,10 @@
         /// If set, the balance will be checked after each bet, and if it is less than this value, the bet batch will end.
         /// </summary>
         public decimal StopMinBalance;
+        /// <summary>
+        /// Set this to a random number.
+        /// </summary>
+        public int ClientSeed;
 
         /// <summary>
         /// The base (lowest) value of the bet.

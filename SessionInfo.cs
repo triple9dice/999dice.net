@@ -27,7 +27,7 @@ namespace Dice.Client.Web
         public int MaxBetBatchSize { get; private set; }
 
         string _AccountCookie, _Email, _EmergencyAddress, _DepositAddress, _Username;
-        long _ClientSeed, _BetCount, _BetWinCount;
+        long _BetCount, _BetWinCount;
         decimal _BetPayIn, _BetPayOut, _Balance;
 
         /// <summary>
@@ -43,21 +43,6 @@ namespace Dice.Client.Web
             {
                 _AccountCookie = value;
                 RaisePropertyChanged("AccountCookie");
-            }
-        }
-        /// <summary>
-        /// The seed used for betting.
-        /// </summary>
-        public long ClientSeed
-        {
-            get
-            {
-                return _ClientSeed;
-            }
-            internal set
-            {
-                _ClientSeed = value;
-                RaisePropertyChanged("ClientSeed");
             }
         }
         /// <summary>

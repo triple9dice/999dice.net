@@ -30,6 +30,10 @@ namespace Dice.Client.Web
         /// True if you have exceeded rate limits.
         /// </summary>
         public bool RateLimited { get; private set; }
+        /// <summary>
+        /// True if the action required a valid Totp (ie Google Authenticator) code, which was not provided.
+        /// </summary>
+        public bool TotpFailure { get; private set; }
 
         internal DiceResponse()
         {
@@ -46,6 +50,8 @@ namespace Dice.Client.Web
                 ErrorMessage = (string)resp["error"];
             if (resp.ContainsKey("TooFast"))
                 RateLimited = true;
+            if (resp.ContainsKey("TotpFailure"))
+                TotpFailure = true;
             if (resp.ContainsKey("success"))
                 Success = true;
         }
@@ -87,8 +93,6 @@ namespace Dice.Client.Web
                     Convert.ToInt32(resp["MaxBetBatchSize"]));
                 if (resp.ContainsKey("AccountCookie"))
                     Session.AccountCookie = (string)resp["AccountCookie"];
-                if (resp.ContainsKey("ClientSeed"))
-                    Session.ClientSeed = Convert.ToInt64(resp["ClientSeed"]);
                 if (resp.ContainsKey("BetCount"))
                     Session.BetCount = Convert.ToInt64(resp["BetCount"]);
                 if (resp.ContainsKey("BetPayIn"))
@@ -276,6 +280,10 @@ namespace Dice.Client.Web
         /// The user's balance immediately before placing this bet.
         /// </summary>
         public decimal StartingBalance { get; private set; }
+        /// <summary>
+        /// The server seed used for this bet.
+        /// </summary>
+        public string ServerSeed { get; private set; }
 
         internal override void SetRawResponse(IDictionary<string, object> resp)
         {
@@ -294,13 +302,15 @@ namespace Dice.Client.Web
             else if (resp.ContainsKey("BetId") &&
                 resp.ContainsKey("PayOut") &&
                 resp.ContainsKey("Secret") &&
-                resp.ContainsKey("StartingBalance"))
+                resp.ContainsKey("StartingBalance") &&
+                resp.ContainsKey("ServerSeed"))
             {
                 Success = true;
                 BetId = Convert.ToInt64(resp["BetId"]);
                 PayOut = Convert.ToDecimal(resp["PayOut"]) / 100000000M;
                 Secret = Convert.ToInt64(resp["Secret"]);
                 StartingBalance = Convert.ToDecimal(resp["StartingBalance"]) / 100000000M;
+                ServerSeed = (string)resp["ServerSeed"];
             }
         }
     }
