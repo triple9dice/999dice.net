@@ -1,18 +1,117 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading;
-#if !NET_35
-using System.Threading.Tasks;
-#endif
 
 namespace Dice.Client.Web
 {
     /// <summary>
     /// Holds information about a user's session.
     /// </summary>
-    public sealed class SessionInfo : INotifyPropertyChanged
+    public sealed class SessionInfo : NotifyPropertyChangedBase
     {
+        public sealed class CurrencyInfo : NotifyPropertyChangedBase
+        {
+            long _BetCount, _BetWinCount;
+            decimal _BetPayIn, _BetPayOut, _Balance;
+            string _DepositAddress;
+
+
+            /// <summary>
+            /// The number of bets made.
+            /// </summary>
+            public long BetCount
+            {
+                get
+                {
+                    return _BetCount;
+                }
+                internal set
+                {
+                    _BetCount = value;
+                    RaisePropertyChanged("BetCount");
+                }
+            }
+            /// <summary>
+            /// The total value of all bets (a negative number).
+            /// This value, plus BetPayOut, equals the total profit/loss from all bets.
+            /// </summary>
+            public decimal BetPayIn
+            {
+                get
+                {
+                    return _BetPayIn;
+                }
+                internal set
+                {
+                    _BetPayIn = value;
+                    RaisePropertyChanged("BetPayIn");
+                }
+            }
+            /// <summary>
+            /// The total value of all bet payouts.
+            /// This value, plus BetPayIn, equals the total profit/loss from all bets.
+            /// </summary>
+            public decimal BetPayOut
+            {
+                get
+                {
+                    return _BetPayOut;
+                }
+                internal set
+                {
+                    _BetPayOut = value;
+                    RaisePropertyChanged("BetPayOut");
+                }
+            }
+            /// <summary>
+            /// The total number of winning bets.
+            /// </summary>
+            public long BetWinCount
+            {
+                get
+                {
+                    return _BetWinCount;
+                }
+                internal set
+                {
+                    _BetWinCount = value;
+                    RaisePropertyChanged("BetWinCount");
+                }
+            }
+            /// <summary>
+            /// The current account balance.
+            /// </summary>
+            public decimal Balance
+            {
+                get
+                {
+                    return _Balance;
+                }
+                internal set
+                {
+                    _Balance = value;
+                    RaisePropertyChanged("Balance");
+                }
+            }
+            /// <summary>
+            /// A deposit address to which funds can be added.
+            /// </summary>
+            public string DepositAddress
+            {
+                get
+                {
+                    return _DepositAddress;
+                }
+                internal set
+                {
+                    _DepositAddress = value;
+                    RaisePropertyChanged("DepositAddress");
+                }
+            }
+        }
+
         /// <summary>
         /// The client's session cookie.
         /// </summary>
@@ -26,9 +125,7 @@ namespace Dice.Client.Web
         /// </summary>
         public int MaxBetBatchSize { get; private set; }
 
-        string _AccountCookie, _Email, _EmergencyAddress, _DepositAddress, _Username;
-        long _BetCount, _BetWinCount;
-        decimal _BetPayIn, _BetPayOut, _Balance;
+        string _AccountCookie, _Email, _EmergencyAddress, _Username;
 
         /// <summary>
         /// The client's account cookie. This value can be saved to create new sessions for the same account at a later date.
@@ -43,83 +140,6 @@ namespace Dice.Client.Web
             {
                 _AccountCookie = value;
                 RaisePropertyChanged("AccountCookie");
-            }
-        }
-        /// <summary>
-        /// The number of bets made.
-        /// </summary>
-        public long BetCount
-        {
-            get
-            {
-                return _BetCount;
-            }
-            internal set
-            {
-                _BetCount = value;
-                RaisePropertyChanged("BetCount");
-            }
-        }
-        /// <summary>
-        /// The total value of all bets (a negative number).
-        /// This value, plus BetPayOut, equals the total profit/loss from all bets.
-        /// </summary>
-        public decimal BetPayIn
-        {
-            get
-            {
-                return _BetPayIn;
-            }
-            internal set
-            {
-                _BetPayIn = value;
-                RaisePropertyChanged("BetPayIn");
-            }
-        }
-        /// <summary>
-        /// The total value of all bet payouts.
-        /// This value, plus BetPayIn, equals the total profit/loss from all bets.
-        /// </summary>
-        public decimal BetPayOut
-        {
-            get
-            {
-                return _BetPayOut;
-            }
-            internal set
-            {
-                _BetPayOut = value;
-                RaisePropertyChanged("BetPayOut");
-            }
-        }
-        /// <summary>
-        /// The total number of winning bets.
-        /// </summary>
-        public long BetWinCount
-        {
-            get
-            {
-                return _BetWinCount;
-            }
-            internal set
-            {
-                _BetWinCount = value;
-                RaisePropertyChanged("BetWinCount");
-            }
-        }
-        /// <summary>
-        /// The current account balance.
-        /// </summary>
-        public decimal Balance
-        {
-            get
-            {
-                return _Balance;
-            }
-            internal set
-            {
-                _Balance = value;
-                RaisePropertyChanged("Balance");
             }
         }
         /// <summary>
@@ -153,21 +173,6 @@ namespace Dice.Client.Web
             }
         }
         /// <summary>
-        /// A deposit address to which funds can be added.
-        /// </summary>
-        public string DepositAddress
-        {
-            get
-            {
-                return _DepositAddress;
-            }
-            internal set
-            {
-                _DepositAddress = value;
-                RaisePropertyChanged("DepositAddress");
-            }
-        }
-        /// <summary>
         /// The username for the account.
         /// </summary>
         public string Username
@@ -183,63 +188,24 @@ namespace Dice.Client.Web
             }
         }
 
+        readonly Dictionary<Currencies, CurrencyInfo> currencyInfo =
+            ((Currencies[])Enum.GetValues(typeof(Currencies)))
+            .Where(x => x != Currencies.None)
+            .ToDictionary(x => x, x => new CurrencyInfo());
+
+        public CurrencyInfo this[Currencies currency]
+        {
+            get
+            {
+                return currencyInfo[currency];
+            }
+        }
+
         internal SessionInfo(string sessionCookie, long accountId, int maxBetBatchSize)
         {
             SessionCookie = sessionCookie;
             AccountId = accountId;
             MaxBetBatchSize = maxBetBatchSize;
         }
-
-        #region INotifyPropertyChanged
-        public event PropertyChangedEventHandler PropertyChanged;
-
-        int PropertyUpdatesPaused;
-        internal void PauseUpdates()
-        {
-            Interlocked.Exchange(ref PropertyUpdatesPaused, 1);
-        }
-        internal void UnpauseUpdates()
-        {
-            if (Interlocked.Exchange(ref PropertyUpdatesPaused, 0) != 0)
-                QueueRaise();
-        }
-        void QueueRaise()
-        {
-            if (Interlocked.Exchange(ref RaisePropertyChangedQueued, 1) != 0)
-                return; 
-#if !NET_35
-            Task.Factory.StartNew(RaisePropertiesChanged);
-#else
-            ThreadPool.QueueUserWorkItem(x => RaisePropertiesChanged());            
-#endif
-        }
-        readonly HashSet<string> Changed = new HashSet<string>();
-        int RaisePropertyChangedQueued;
-        void RaisePropertyChanged(string propname)
-        {
-            if (PropertyChanged == null)
-                return;
-            lock (Changed)
-                if (!Changed.Add(propname))
-                    return;
-            if (Interlocked.CompareExchange(ref PropertyUpdatesPaused, 0, 0) != 0)
-                return;
-            QueueRaise();
-        }
-        void RaisePropertiesChanged()
-        {
-            string[] chg;
-            lock (Changed)
-            {
-                chg = Changed.ToArray();
-                Changed.Clear();
-                Interlocked.Exchange(ref RaisePropertyChangedQueued, 0);
-            }
-            var pc = PropertyChanged;
-            if (pc != null)
-                foreach (var n in chg)
-                    pc(this, new PropertyChangedEventArgs(n));
-        }
-        #endregion
     }
 }

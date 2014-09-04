@@ -93,22 +93,45 @@ namespace Dice.Client.Web
                     Convert.ToInt32(resp["MaxBetBatchSize"]));
                 if (resp.ContainsKey("AccountCookie"))
                     Session.AccountCookie = (string)resp["AccountCookie"];
-                if (resp.ContainsKey("BetCount"))
-                    Session.BetCount = Convert.ToInt64(resp["BetCount"]);
-                if (resp.ContainsKey("BetPayIn"))
-                    Session.BetPayIn = Convert.ToDecimal(resp["BetPayIn"]) / 100000000M;
-                if (resp.ContainsKey("BetPayOut"))
-                    Session.BetPayOut = Convert.ToDecimal(resp["BetPayOut"]) / 100000000M;
-                if (resp.ContainsKey("BetWinCount"))
-                    Session.BetWinCount = Convert.ToInt64(resp["BetWinCount"]);
-                if (resp.ContainsKey("Balance"))
-                    Session.Balance = Convert.ToDecimal(resp["Balance"]) / 100000000M;
                 if (resp.ContainsKey("Email"))
                     Session.Email = (string)resp["Email"];
                 if (resp.ContainsKey("EmergencyAddress"))
                     Session.EmergencyAddress = (string)resp["EmergencyAddress"];
-                if (resp.ContainsKey("DepositAddress"))
-                    Session.DepositAddress = (string)resp["DepositAddress"];
+
+                for (int x = 0; ; ++x)
+                {
+                    IDictionary<string, object> c = null;
+                    SessionInfo.CurrencyInfo ci = null;
+                    switch (x)
+                    {
+                        case 0:
+                            c = resp;
+                            ci = Session[Currencies.BTC];
+                            break;
+                        case 1:
+                            c = resp.ContainsKey("Doge") ? resp["Doge"] as IDictionary<string, object> : null;
+                            ci = Session[Currencies.Doge];
+                            break;
+                        default:
+                            break;
+                    }
+                    if (ci == null)
+                        break;
+                    if (c == null)
+                        continue;
+                    if (c.ContainsKey("BetCount"))
+                        ci.BetCount = Convert.ToInt64(c["BetCount"]);
+                    if (c.ContainsKey("BetPayIn"))
+                        ci.BetPayIn = Convert.ToDecimal(c["BetPayIn"]) / 100000000M;
+                    if (c.ContainsKey("BetPayOut"))
+                        ci.BetPayOut = Convert.ToDecimal(c["BetPayOut"]) / 100000000M;
+                    if (c.ContainsKey("BetWinCount"))
+                        ci.BetWinCount = Convert.ToInt64(c["BetWinCount"]);
+                    if (c.ContainsKey("Balance"))
+                        ci.Balance = Convert.ToDecimal(c["Balance"]) / 100000000M;
+                    if (c.ContainsKey("DepositAddress"))
+                        ci.DepositAddress = (string)c["DepositAddress"];
+                }
             }
         }
     }
@@ -147,6 +170,10 @@ namespace Dice.Client.Web
         /// True if there are insufficient funds to make the requested withdrawal.
         /// </summary>
         public bool InsufficientFunds { get; private set; }
+        /// <summary>
+        /// The currency of the withdrawal
+        /// </summary>
+        public Currencies Currency { get; internal set; }
 
         internal override void SetRawResponse(IDictionary<string, object> resp)
         {
@@ -202,6 +229,10 @@ namespace Dice.Client.Web
         /// The current balance of the user.
         /// </summary>
         public decimal Balance { get; private set; }
+        /// <summary>
+        /// The currency of the balance
+        /// </summary>
+        public Currencies Currency { get; internal set; }
 
         internal override void SetRawResponse(IDictionary<string, object> resp)
         {
@@ -229,6 +260,10 @@ namespace Dice.Client.Web
         /// A bitcoin address accepting deposits for the user.
         /// </summary>
         public string DepositAddress { get; private set; }
+        /// <summary>
+        /// The currency of the deposit address
+        /// </summary>
+        public Currencies Currency { get; internal set; }
 
         internal override void SetRawResponse(IDictionary<string, object> resp)
         {
@@ -284,6 +319,11 @@ namespace Dice.Client.Web
         /// The server seed used for this bet.
         /// </summary>
         public string ServerSeed { get; private set; }
+
+        /// <summary>
+        /// The currency of the bet
+        /// </summary>
+        public Currencies Currency { get; internal set; }
 
         internal override void SetRawResponse(IDictionary<string, object> resp)
         {
@@ -377,6 +417,11 @@ namespace Dice.Client.Web
         /// The user's balance immediately before placing the first bet of this batch.
         /// </summary>
         public decimal StartingBalance { get; private set; }
+
+        /// <summary>
+        /// The currency of the bets
+        /// </summary>
+        public Currencies Currency { get; internal set; }
 
         internal override void SetRawResponse(IDictionary<string, object> resp)
         {

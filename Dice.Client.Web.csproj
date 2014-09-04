@@ -38,9 +38,11 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AutomatedBetsSettings.cs" />
+    <Compile Include="Currencies.cs" />
     <Compile Include="DiceAsyncResult.cs" />
     <Compile Include="DiceWebAPI.cs" />
     <Compile Include="DiceResponse.cs" />
+    <Compile Include="NotifyPropertyChangedBase.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="SessionInfo.cs" />
     <Compile Include="StringExtension.cs" />

@@ -6,6 +6,7 @@
     public sealed class AutomatedBetsSettings
     {
         decimal basePayIn, maxAllowedPayIn, increaseOnWinPercent, increaseOnLosePercent, startingPayIn;
+        Currencies currency;
         
         /// <summary>
         /// The low range of the guess for the bets.
@@ -128,6 +129,20 @@
             {
                 increaseOnLosePercent = decimal.Round(value, 6);
             }
-        }        
+        }
+        /// <summary>
+        /// The currency to use for these bet.
+        /// </summary>
+        public Currencies Currency
+        {
+            get
+            {
+                return currency;
+            }
+            set
+            {
+                currency = value;
+            }
+        }
     }
 }
