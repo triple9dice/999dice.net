@@ -112,6 +112,10 @@ namespace Dice.Client.Web
                             c = resp.ContainsKey("Doge") ? resp["Doge"] as IDictionary<string, object> : null;
                             ci = Session[Currencies.Doge];
                             break;
+                        case 2:
+                            c = resp.ContainsKey("LTC") ? resp["LTC"] as IDictionary<string, object> : null;
+                            ci = Session[Currencies.LTC];
+                            break;
                         default:
                             break;
                     }
@@ -451,7 +455,7 @@ namespace Dice.Client.Web
                 TotalPayIn = Convert.ToDecimal(resp["PayIn"]) / 100000000M;
                 TotalPayOut = Convert.ToDecimal(resp["PayOut"]) / 100000000M;
                 StartingBalance = Convert.ToDecimal(resp["StartingBalance"]) / 100000000M;
-                BetIds = Enumerable.Range(0, BetCount).Select(x => BetId + x).ToArray();
+                BetIds = Enumerable.Range(0, BetCount).Select(x => BetId).ToArray();
                 Secrets = new long[BetCount];
                 PayIns = new decimal[BetCount];
                 PayOuts = new decimal[BetCount];

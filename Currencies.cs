@@ -2,6 +2,6 @@
 {
     public enum Currencies
     {
-        None = 0, BTC, Doge
+        None = 0, BTC, Doge, LTC
     }
 }

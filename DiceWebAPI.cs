@@ -37,7 +37,7 @@ namespace Dice.Client.Web
         static JavaScriptSerializer Serializer { get { return new JavaScriptSerializer(); } }
 #endif
 
-        static readonly Uri WebUri = new Uri("https://www.999dice.com/api/web.aspx");
+        public static Uri WebUri = new Uri("https://www.999dice.com/api/web.aspx");
 
         static SHA512 CreateSHA512()
         {
@@ -260,8 +260,8 @@ namespace Dice.Client.Web
                 { "ResetOnLoseMaxBet", settings.ResetOnLoseMaxBet.ToString() },
                 { "StopOnLoseMaxBet", settings.StopOnLoseMaxBet.ToString() },
                 { "StopMaxBalance", ((long)(settings.StopMaxBalance*100000000)).ToString() },
-                { "StopMinBalance", ((long)settings.StopMinBalance*100000000).ToString() },
-                { "StartingPayIn", ((long)settings.StartingPayIn*100000000).ToString() },
+                { "StopMinBalance", ((long)(settings.StopMinBalance*100000000)).ToString() },
+                { "StartingPayIn", ((long)(settings.StartingPayIn*100000000)).ToString() },
                 { "Compact", "1" },
                 { "ClientSeed", settings.ClientSeed.ToString() },
                 { "Currency", settings.Currency.ToString() }
@@ -435,7 +435,7 @@ namespace Dice.Client.Web
         static void Validate(Currencies currency)
         {
             if (currency == Currencies.None || !Enum.IsDefined(typeof(Currencies), currency))
-                throw new ArgumentOutOfRangeException();            
+                throw new ArgumentOutOfRangeException();
         }
         static void Validate(SessionInfo session, string other)
         {
@@ -533,7 +533,7 @@ namespace Dice.Client.Web
                     hash = sha512.ComputeHash(hash);
                 }
             }
-        }        
+        }
         #endregion
 
         #region API calls
